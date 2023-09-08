@@ -120,7 +120,7 @@ import random
 class Mutator:
     def __init__(self):
         mutate_code = """
-                __kernel void Mutate(__global float* Connections, int seed) {
+                __kernel void Mutate(__global float* Connections, int seed, int mutate_chance) {
                     int index = get_global_id(0);
 
                     // Generate Random Number between 0 and 'size'
@@ -135,7 +135,7 @@ class Mutator:
 
                     int x = state % 50;
                     
-                    if (x < 3) {
+                    if (x < mutate_chance) {
                     
                         // Generate random bias and weight values
                         float Bias = (state % size);
@@ -156,7 +156,7 @@ class Mutator:
         self.MutateProgram = cl.Program(CTX, mutate_code).build()
 
         # Set Some Settings Of MutateProgram
-        self.MutateProgram.Mutate.set_scalar_arg_dtypes([None, np.int32])
+        self.MutateProgram.Mutate.set_scalar_arg_dtypes([None, np.int32, np.int32])
 
         # Some Defaults
         self.MaxConnectionToBeModified = 20
@@ -164,10 +164,10 @@ class Mutator:
     def Copy(self, network):
         return deepcopy(network)
 
-    def Mutate(self, network):
+    def Mutate(self, network, mutate_chance=3):
         self.CreateNewConnections(network)
         self.DeleteOldConnections(network) # This needs to be sped up
-        self.MutateExistingLayers(network)
+        self.MutateExistingLayers(network, mutate_chance)
 
 
     def CreateNewConnections(self, network):
@@ -190,7 +190,7 @@ class Mutator:
                 ConnectionLayer = np.delete(ConnectionLayer, delete_indices)
 
 
-    def MutateExistingLayers(self, network):
+    def MutateExistingLayers(self, network, mutate_chance):
         for index, ConnectionLayer in enumerate(network.connections):
             ConnBuffer = cl.Buffer(CTX, cl.mem_flags.READ_WRITE, size=ConnectionLayer.nbytes)
             cl.enqueue_copy(QUEUE, ConnBuffer, ConnectionLayer).wait()
@@ -199,7 +199,7 @@ class Mutator:
             seed = random.randint(0, 500)
 
             # Mutate Connections
-            self.MutateProgram.Mutate(QUEUE, (ConnBuffer.size // 4,), None, ConnBuffer, np.int32(seed)).wait()
+            self.MutateProgram.Mutate(QUEUE, (ConnBuffer.size // 4,), None, ConnBuffer, np.int32(seed), np.int32(mutate_chance)).wait()
 
             # Read the new Connections
             output_buffer = np.empty((ConnectionLayer.size,), dtype=np.float32)
