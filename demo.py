@@ -33,28 +33,3 @@ MyOutputs = Executor.CalculateOutputs(LoadedNetwork, MyInputs)
 # The outputs will likely be all 0.5 due to the connections all being 0 or very close to
 print(f"Calculated Outputs: {MyOutputs}")
 
-# Mutater class
-Mutator = GpuNet.Mutator()
-
-# Copy network
-NewNetwork = Mutator.Copy(LoadedNetwork)
-
-# Mutate network, as this is a small network, and my module is for large networks,
-# we must change the chance for a connection to mutate. (default=6%)
-
-MutateChance = 50
-
-# Mutate
-Mutator.Mutate(NewNetwork, MutateChance)
-
-# Recalculate the results
-NewOutputs = Executor.CalculateOutputs(NewNetwork, MyInputs)
-
-print(f"Mutated Network Outputs: {NewOutputs}")
-
-
-
-
-
-
-

@@ -7,6 +7,7 @@ class Network:
     size = []
     layers = []
     connections = []
+    biases = []
 
 
 def LegacyLoad(path):
@@ -54,6 +55,7 @@ def ExtractConnections(binaryData, Offset):
         Offset += SectionLength
 
     return Connections, Offset
+
 def ExtractLayers(binaryData, Offset):
     Connections = []
 
@@ -77,6 +79,28 @@ def ExtractLayers(binaryData, Offset):
 
     return Connections, Offset
 
+def ExtractBiases(binaryData, Offset):
+    Connections = []
+
+    while (Offset < len(binaryData)):
+        OFFSET_SEGMENT_LENGTH = 10
+
+        SectionLength = int(binaryData[Offset:Offset+OFFSET_SEGMENT_LENGTH].decode().lstrip("0")) # its complicated
+        SectionType = binaryData[Offset+OFFSET_SEGMENT_LENGTH:Offset+OFFSET_SEGMENT_LENGTH + 1].decode() # What?
+
+        if (SectionType != "b"):
+            break
+
+        sub_array_binary = binaryData[Offset + OFFSET_SEGMENT_LENGTH + 1 : Offset + OFFSET_SEGMENT_LENGTH + 1 + SectionLength]
+        sub_array = np.frombuffer(sub_array_binary, dtype=np.float32)
+
+
+        Connections.append(sub_array)
+
+        Offset += OFFSET_SEGMENT_LENGTH+1
+        Offset += SectionLength
+
+    return Connections, Offset
 
 def Load(path):
     NewNet = Network()
@@ -92,10 +116,12 @@ def Load(path):
 
     ConnectionData, Offset = ExtractConnections(BinaryData, Offset)
     LayerData, Offset = ExtractLayers(BinaryData, Offset)
+    BiasData, Offset = ExtractBiases(BinaryData, Offset)
 
     NewNet.size = NetworkSize
     NewNet.layers = LayerData
     NewNet.connections = ConnectionData
+    NewNet.biases = BiasData
 
     return NewNet
 
@@ -117,10 +143,12 @@ def Save(network, path):
 
     ConnectionData = ArrayOfNumpyArraysToBytes(network.connections, "c")
     LayerData = ArrayOfNumpyArraysToBytes(network.layers, "l")
+    BiasData = ArrayOfNumpyArraysToBytes(network.biases, "b")
 
 
     NetworkData += ConnectionData
     NetworkData += LayerData
+    NetworkData += BiasData
 
 
     Mode = "wb" if os.path.exists(path) else "xb"
@@ -146,11 +174,18 @@ class NetworkMaker():
 
         MyNetwork.layers = self.Layers
         MyNetwork.connections = self.GenerateRandomConnections(sparsity=self.sparsity)
+        MyNetwork.biases = self.GenerateBiases(self.Size)
 
         return MyNetwork
 
 
     def GenerateBlankLayers(self, size):
+        return [
+            np.array([0 for i in range(sub_size)], dtype=np.float32)
+            for sub_size in size
+        ]
+
+    def GenerateBiases(self, size):
         return [
             np.array([0 for i in range(sub_size)], dtype=np.float32)
             for sub_size in size
@@ -176,26 +211,27 @@ class NetworkMaker():
         return AllConnections
 
     def GenerateLayerConnections(self, layerIndex, layer, sparsity):
-        BIAS = 0.0
         WEIGHT = 1.0
 
         LayerConnections = []
         for ActiveNodeIndex, ActiveNode in enumerate(layer):
             for InputNodeIndex, InputNode in enumerate(self.Layers[layerIndex - 1]):
                 if random.random() <= sparsity:
-                    LayerConnections.extend([ActiveNodeIndex, InputNodeIndex, WEIGHT, BIAS])
+                    LayerConnections.extend([ActiveNodeIndex, InputNodeIndex, WEIGHT])
 
         return LayerConnections
 
 if __name__ == "__main__":
-
-    LayerSizes = [35000 for i in range(100)]
+    LayerSizes = [30500 for i in range(20)]
     LayerSizes.append(4)
     LayerSizes.insert(0, 30000)
-    
+
+
     network = NetworkMaker(LayerSizes, 0.005).Generate()
     print("Starting Save")
-    Save(network, "EvenLargerNetwork.pyn")
+    
+    Save(network, "SmallNetwork.pyn")
+
 
 
 
