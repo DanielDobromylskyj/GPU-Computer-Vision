@@ -47,13 +47,18 @@ class Executor:
 
         activation_program = """
                 __kernel void SigmoidLayerAndBias(__global float* Layer, __global float* Bias) {
+                    // ACTIVATION FUNCTION
                     int i = get_global_id(0);
 
                     // Get value and add its Bias
                     float value = Layer[i] + Bias[i];
-                    
-                    float exp_val = exp(-value);
-                    Layer[i] = 1.0f / (1.0f + exp_val);
+
+                    // SIGMOID
+                    //float exp_val = exp(-value);
+                    //Layer[i] = 1.0f / (1.0f + exp_val);
+
+                    // ReLU
+                    Layer[i] = max(0.0f, value);
                 }
             """
 
@@ -62,7 +67,7 @@ class Executor:
         self.ConnectionProgram = cl.Program(CTX, layer_program).build()
         self.ActivationProgram = cl.Program(CTX, activation_program).build()
 
-    def CalculateOutputs(self, network, inputs):
+    def CalculateOutputs(self, network, inputs, ForBackpropagation=False):
         # Run some quick checks
         if type(inputs) != np.ndarray:
             raise BadInput(f"Inputs must be a numpy array, not {type(inputs)}")
@@ -99,8 +104,24 @@ class Executor:
             # Calculate the outputs and save them to 'OutputBuffer'
             OutputBuffer = self.RunLayer(InputBuffer, OutputBuffer, ConnectionBuffer, BiasesBuffer)
 
-            # Set Outputs to Inputs for next layer
+            # Store outputs if needed
+            if ForBackpropagation:
+                # Make empty array
+                LayerValues = np.empty_like(network.layers[layerIndex])
 
+                # Fill array
+                cl.enqueue_copy(
+                    QUEUE,
+                    LayerValues,
+                    OutputBuffer
+                ).wait()
+
+                # Store array
+                network.layers[layerIndex] = LayerValues
+
+                
+
+            # Set Outputs to Inputs for next layer
             InputBuffer = OutputBuffer
 
 
@@ -128,4 +149,24 @@ class Executor:
 # Training / Backprop
 
 class BackPropagator:
-    pass
+    def __init__(self):
+        program_code = """
+                __kernel void SigmoidLayerAndBias(__global float* Layer, __global float* Previous) {
+                    // ACTIVATION FUNCTION
+                    int i = get_global_id(0);
+
+                    // Get value and add its Bias
+                    float value = Layer[i] + Bias[i];
+
+                    // SIGMOID
+                    //float exp_val = exp(-value);
+                    //Layer[i] = 1.0f / (1.0f + exp_val);
+
+                    // ReLU
+                    Layer[i] = max(0.0f, value);
+                }
+            """
+
+
+
+        self.Program = cl.Program(CTX, program_code).build()
