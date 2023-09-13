@@ -8,7 +8,6 @@ CTX = cl.Context([DEVICE])
 QUEUE = cl.CommandQueue(CTX)
 
 
-# NOTE: Switch To ReLU Function,
 # Try to program CNNs, when I understand them better
 
 class Network:
@@ -151,22 +150,23 @@ class Executor:
 class BackPropagator:
     def __init__(self):
         program_code = """
-                __kernel void SigmoidLayerAndBias(__global float* Layer, __global float* Previous) {
-                    // ACTIVATION FUNCTION
+                __kernel void BackPropagate(__global float* CurrentLayer, __global float* PreviousLayerGradients, __global float* connections, int connection_length, __global float* biases) {
                     int i = get_global_id(0);
-
-                    // Get value and add its Bias
-                    float value = Layer[i] + Bias[i];
-
-                    // SIGMOID
-                    //float exp_val = exp(-value);
-                    //Layer[i] = 1.0f / (1.0f + exp_val);
-
-                    // ReLU
-                    Layer[i] = max(0.0f, value);
+                    
+                    // Calculate the sum of dYk * dYk/dX
+                    float Total_dL_dX = 0.0f;
+                    for (int j = 0; j < connection_length; j++) {
+                        int CurrentLayerNode = connections[(j*3)]
+                        int PreviousLayeNode = connections[(j*3+1)]
+                        float Weight = connections[(j*3+2)]
+                        
+                        Total_dL_dX += ()
+                    
+                    
+                    }
                 }
             """
 
 
 
-        self.Program = cl.Program(CTX, program_code).build()
+        self.BackPropProgram = cl.Program(CTX, program_code).build()
