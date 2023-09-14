@@ -1,9 +1,8 @@
 import network
 import executor_gpu as GpuNet
-import random
 import numpy as np
-from copy import deepcopy
 import time
+import random
 
 # Special Case Import(s)
 import openslide
@@ -12,92 +11,38 @@ import openslide
 
 
 Executor = GpuNet.Executor()
+BackPropagator = GpuNet.BackPropagator()
 
+def EpocheReport(EpocheNumber, MaxEpoches, TimeTaken):
+    print("\n")
+    print(f"Completed Epoche {EpocheNumber} Out of {MaxEpoches}. ({round(EpocheNumber/MaxEpoches*100)}%)")
+    print(f"Took {TimeTaken}s. Time Left: {round((TimeTaken*(MaxEpoches-EpocheNumber))/60, 2)} mins")
 
-class Trainer:
-    def __init__(self, Network, ErrorFunc, TraingingData):
-        self.Network = Network
-        
-        self.TrainingData = TraingingData
-        self.ErrorFunc = ErrorFunc
+def Teach(network, TrainingData, Epoches, LearningRate=0.1, ReportAfterEpoche=True, UpdateAfterEachItem=False):
+    for epoche in range(Epoches):
+        start_time = time.time()
 
-        self.TestsPerScore = 20
-        self.NumberOfCycles = 100
+        for item in TrainingData:
+            Label, NetworkInputs = item
 
-        self.StepSize = 0.5
+            # Test network on data
+            NetworkOutputs = Executor.CalculateOutputs(network, NetworkInputs)
 
-    def ScoreNetwork(self, network):
-        """ Score a network multiple times and take an average """
-        Total = 0
-        for i in range(self.TestsPerScore):
-            Total += self.TestNetwork(network, random.choice(self.TrainingData))
+            # Update Weights and biases
+            BackPropagator.BackPropogateNetwork(network, Label, NetworkOutputs, LearningRate=LearningRate)
 
-        return Total / self.TestsPerScore
-        
-    def TestNetwork(self, network, sample):
-        """ Score a single network once. """
-        label, data = sample
+            if UpdateAfterEachItem:
+                print("Completed One Back Propagation")
 
-        outputs = Executor.CalculateOutputs(network, data)
-
-        error = sum([abs(x) for x in outputs])
-        return error
-
-    def Iterate(self):
-        BestScore = self.ScoreNetwork(self.Network)
-
-        Connections = np.array(self.Network.connections)
-        
-        for layerIndex, layer in enumerate(self.Network.layers):
-            if layerIndex == 0:
-                continue
-
-
-            for connectionIndex in range(len(self.Network.connections[layerIndex-1]) // 3):
-                ConnIndex = (connectionIndex * 3) + 2
-                Connections = np.array(self.Network.connections[layerIndex-1])
-                
-                # Try increasing the value of the weight
-                Connections[ConnIndex] += self.StepSize
-
-                Score = self.ScoreNetwork(self.Network)
-                if abs(Score) > abs(BestScore):
-                    # Try going 1 step size in the other direction
-                    Connections[ConnIndex] -= self.StepSize * 2
-
-                    Score = self.ScoreNetwork(self.Network)
-                    if abs(Score) > abs(BestScore):
-                        # If nothing worked, reset to old values
-                        Connections[ConnIndex] += self.StepSize
-
-                    else:
-                        BestScore = Score
-                else:
-                    BestScore = Score
-
-        self.Network.connections = Connections
+        elapsed_time = time.time() - start_time
+        if ReportAfterEpoche:
+            EpocheReport( epoche, Epoches, elapsed_time)
             
 
-                
-    
-    def Run(self):
-        Cycle = 0
-
-        TotalTime = 0
-        while Cycle < self.NumberOfCycles:
-            start = time.time()
+    return network
             
-            self.Iterate()
 
-            elapsed = time.time() - start
-            TotalTime += elapsed
-            print(f"> Cycles Number:{Cycle} Out of {self.NumberOfCycles}")
-            print(f"- Time Taken: {elapsed}")
-            print(f"- Estimate Time Left: {(TotalTime / Cycle) * self.NumberOfCycles}")
-            
-            Cycle += 1
-
-        return self.Network
+        
 
 
 if __name__ == "__main__":
@@ -125,36 +70,19 @@ if __name__ == "__main__":
 
         return ExtractedData
 
-
-    def ErrorFunc(outputs, labelData):
-        # Unpack Data
-        WantedX, WantedY, WantedWidth, WantedHight = labelData
-
-        OutputX, OutputY, OutputWidth, OutputHight = outputs
-
-        # Calculate The Variation Between Output and Real
-
-        return [(WantedX / 100) - OutputX,
-                (WantedY / 100) - OutputY,
-                (WantedWidth / 100) - OutputWidth,
-                (WantedHight / 100) - OutputHight]
-
     # Load the blank Network
-    net = network.Load("SmallNetwork.pyn")
+    MyNetwork = network.Load("LargeNetwork.pyn")
     
     # Load some training Data
     TrainingData = LoadTrainingData(numberOfItems=200)
 
-    # Initialize the Trainer with its needed inputs
-    trainer = Trainer(net, ErrorFunc, TrainingData)
 
-    print("Starting Training")
-
-    # Run the trainer and get the trained network back
-    TrainedNet = trainer.Run()
+    #                            Epoches
+    Teach(MyNetwork, TrainingData, 100)
+    
 
     # Save the network
-    network.Save(TrainedNet, "Trained_SmallNetwork.pyn")
+    network.Save(MyNetwork, "Trained_LargeNetwork.pyn")
 
     print("COMPLETE") # DEBUG
 

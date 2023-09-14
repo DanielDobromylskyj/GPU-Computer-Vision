@@ -261,7 +261,7 @@ class BackPropagator:
         network.biases[layerIndex] = NewBiases
         network.gradient_data = NewGradients
 
-    def BackPropogateNetwork(self, network, TargetOutputs, PredicitedOutputs):
+    def BackPropogateNetwork(self, network, TargetOutputs, PredicitedOutputs, LearningRate=0.1):
         # Calculate Error and add it to network
         Error = np.array([
             PredicitedOutputs[i] - TargetOutputs[i] for i in range(len(TargetOutputs))
@@ -271,9 +271,11 @@ class BackPropagator:
 
         # Backpropogate Over the network
 
+        NumberOfLayers = len(network.layers) - 2
+        for i in range(len(network.layers)):
+            LayerIndex = NumberOfLayers - i
 
-        for LayerIndex in range(len(network.layers)):
-            pass
+            self.BackPropogateLayer(network, LayerIndex, LearningRate)
 
         
         

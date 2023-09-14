@@ -24,7 +24,7 @@ Executor = GpuNet.Executor()
 
 # Set some inputs, the Function will raise an error if we dont make it a numpy array
 MyInputs = np.array(
-    [1, 2, 3, 4, -5]
+    [1, 2, 3, 4, 5]
     )
 
 # Calculate the networks outputs:
@@ -34,15 +34,20 @@ MyOutputs = Executor.CalculateOutputs(LoadedNetwork, MyInputs)
 print(f"Calculated Outputs: {MyOutputs}")
 
 # Make a label (wanted output for the given input)
-Label = np.array([1, 4])
+Label = np.array([55, 41])
 
 # Run 1 epoche of backpropogation
 
 # Init Class
 BackPropagator = GpuNet.BackPropagator()
 
-# Setup 
+# Back propogate (1 epoche)
 BackPropagator.BackPropogateNetwork(LoadedNetwork, Label, MyOutputs)
+
+# Test
+MyOutputs = Executor.CalculateOutputs(LoadedNetwork, MyInputs)
+print(f"Calculated Outputs: {MyOutputs} (After 1 Epoche)")
+
 
 
 

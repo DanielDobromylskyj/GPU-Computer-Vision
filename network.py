@@ -217,7 +217,7 @@ class NetworkMaker():
         LayerConnections = []
         for ActiveNodeIndex, ActiveNode in enumerate(layer):
             for InputNodeIndex, InputNode in enumerate(self.Layers[layerIndex - 1]):
-                if random.random() <= sparsity:
+                if random.random() < sparsity:
                     LayerConnections.extend([ActiveNodeIndex, InputNodeIndex, WEIGHT])
 
         return LayerConnections
