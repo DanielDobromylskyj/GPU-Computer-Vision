@@ -15,6 +15,7 @@ class Network:
     layers = []
     connections = []
     biases = []
+    gradient_data = []
 
 # Errors
 
@@ -149,24 +150,133 @@ class Executor:
 
 class BackPropagator:
     def __init__(self):
-        program_code = """
-                __kernel void BackPropagate(__global float* CurrentLayer, __global float* PreviousLayerGradients, __global float* connections, int connection_length, __global float* biases) {
+        gradient_code = """
+                __kernel void CalcGradients(__global float* CurrentLayerGradient, __global float* PreviousLayer, __global float* PreviousLayerGradients, __global float* connections, __global float* BiasSum, float LearningRate) {
                     int i = get_global_id(0);
-                    
-                    // Calculate the sum of dYk * dYk/dX
-                    float Total_dL_dX = 0.0f;
-                    for (int j = 0; j < connection_length; j++) {
-                        int CurrentLayerNode = connections[(j*3)]
-                        int PreviousLayeNode = connections[(j*3+1)]
-                        float Weight = connections[(j*3+2)]
-                        
-                        Total_dL_dX += ()
-                    
-                    
+
+                    // Get Connection Data
+                    int CurrentLayerNode = connections[(i*3)];
+                    int PreviousLayerNode = connections[(i*3+1)];
+                    float Weight = connections[(i*3+2)];
+
+                    // Get data about Node connection is going to (from in our case)
+                    float PrevoisNodeValue = PreviousLayer[PreviousLayerNode];
+                    float PreviousNodeGradient = PreviousLayerGradients[PreviousLayerNode];
+
+                    // ReLU Derivative
+                    int dYk_dX = 0;
+                    if (PrevoisNodeValue > 0) {
+                        dYk_dX = 1;
                     }
+
+                    // Update Gradient for next propagation (step)
+                    CurrentLayerGradient[CurrentLayerNode] = dYk_dX;
+
+                    // Calculate Gradient of one Connection (bias)
+                    float dL_db = (PreviousNodeGradient * dYk_dX);
+
+                    // Multiply dL_db by Weight to get Weight contribution
+                    float dl_dW = dL_db * Weight;
+
+                    // Add Gradient to Total (Bias)
+                    BiasSum[CurrentLayerNode] += dL_db;
+
+                    // Calculate new weight
+                    float NewWeight = Weight - (LearningRate * dl_dW);
+
+                    // Update Weight
+                    connections[(i*3 +2)] = NewWeight;
                 }
             """
 
+        bias_update_code = """
+                __kernel void UpdateBiases(__global float* Biases, __global float* BiasSum, float LearningRate) {
+                    int i = get_global_id(0);
+
+                    // Calculate new bias
+                    float NewBias = Biases[i] - (LearningRate * BiasSum[i]);
+
+                    // Store bias
+                    Biases[i] = NewBias;
+                    
+                }
+            """
+        
+        self.GradientCalcProgram = cl.Program(CTX, gradient_code).build()
+        self.BiasUpdateProgram = cl.Program(CTX, bias_update_code).build()
+
+    def BackPropogateLayer(self, network, layerIndex, learning_rate=0.1):
+        """
+        Calculates the Gradient Loss of each node in the layer.
+        Works on every layer EXCEPT the output layer. <- ?
+        """
+        # ----- Load ALL needed data into buffers
+        
+        # Gradients (Returns)
+        NewGradientsBuffer = cl.Buffer(CTX, cl.mem_flags.READ_WRITE, size=network.layers[layerIndex].nbytes)
+        
+        # Previous Layer Node Values
+        PrevLayerValuesBuffer = cl.Buffer(CTX, cl.mem_flags.READ_WRITE, size=network.layers[layerIndex + 1].nbytes)
+        cl.enqueue_copy(QUEUE, PrevLayerValuesBuffer, network.layers[layerIndex + 1]).wait()
+
+        # Previous Layer Gradients
+        PrevLayerGradientsBuffer = cl.Buffer(CTX, cl.mem_flags.READ_WRITE, size=np.array(network.gradient_data).nbytes)
+        cl.enqueue_copy(QUEUE, PrevLayerGradientsBuffer, network.gradient_data).wait()
+
+        # Connections
+        ConnectionBuffer = cl.Buffer(CTX, cl.mem_flags.READ_WRITE, size=network.connections[layerIndex].nbytes)
+        cl.enqueue_copy(QUEUE, ConnectionBuffer, network.connections[layerIndex]).wait()
+
+        # Bias Sum (Returns)
+        BiasSumBuffer = cl.Buffer(CTX, cl.mem_flags.READ_WRITE, size=network.layers[layerIndex].nbytes)
+
+        # Bias Buffer
+        BiasBuffer = cl.Buffer(CTX, cl.mem_flags.READ_WRITE, size=network.biases[layerIndex].nbytes)
+        cl.enqueue_copy(QUEUE, BiasBuffer, network.biases[layerIndex]).wait()
+
+        # ----- Run Programs
+
+        # Run Program For Updating Weights and getting Sum Of Biases Gradients
+        self.GradientCalcProgram.CalcGradients(QUEUE, (ConnectionBuffer.size // 3,), None, NewGradientsBuffer, PrevLayerValuesBuffer, PrevLayerGradientsBuffer, ConnectionBuffer, BiasSumBuffer, np.float32(learning_rate)).wait()
+
+        # Run Program To Update Biases
+        self.BiasUpdateProgram.UpdateBiases(QUEUE, (ConnectionBuffer.size // 3,), None, BiasBuffer, BiasSumBuffer, np.float32(learning_rate)).wait()
+
+        # ----- Update Network
+
+        # Extract New Values
+        NewGradients = np.empty_like(network.layers[layerIndex])
+        cl.enqueue_copy(QUEUE, NewGradients, NewGradientsBuffer).wait()
+
+        # Extract New Connections
+        NewConnections = np.empty_like(network.connections[layerIndex])
+        cl.enqueue_copy(QUEUE, NewConnections, ConnectionBuffer).wait()
+
+        # Extract New Biases
+        NewBiases = np.empty_like(network.biases[layerIndex])
+        cl.enqueue_copy(QUEUE, NewBiases, BiasBuffer).wait()
+
+        # Set network values
+        network.connections[layerIndex] = NewConnections
+        network.biases[layerIndex] = NewBiases
+        network.gradient_data = NewGradients
+
+    def BackPropogateNetwork(self, network, TargetOutputs, PredicitedOutputs):
+        # Calculate Error and add it to network
+        Error = np.array([
+            PredicitedOutputs[i] - TargetOutputs[i] for i in range(len(TargetOutputs))
+            ])
+
+        network.gradient_data = Error
+
+        # Backpropogate Over the network
 
 
-        self.BackPropProgram = cl.Program(CTX, program_code).build()
+        for LayerIndex in range(len(network.layers)):
+            pass
+
+        
+        
+
+
+        

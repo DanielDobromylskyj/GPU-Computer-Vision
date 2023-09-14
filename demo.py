@@ -33,3 +33,16 @@ MyOutputs = Executor.CalculateOutputs(LoadedNetwork, MyInputs)
 # The outputs will likely be all 0.5 due to the connections all being 0 or very close to
 print(f"Calculated Outputs: {MyOutputs}")
 
+# Make a label (wanted output for the given input)
+Label = np.array([1, 4])
+
+# Run 1 epoche of backpropogation
+
+# Init Class
+BackPropagator = GpuNet.BackPropagator()
+
+# Setup 
+BackPropagator.BackPropogateNetwork(LoadedNetwork, Label, MyOutputs)
+
+
+

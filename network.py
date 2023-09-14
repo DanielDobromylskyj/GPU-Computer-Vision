@@ -8,6 +8,7 @@ class Network:
     layers = []
     connections = []
     biases = []
+    gradient_data = []
 
 
 def LegacyLoad(path):
