@@ -15,8 +15,8 @@ BackPropagator = GpuNet.BackPropagator()
 
 def EpocheReport(EpocheNumber, MaxEpoches, TimeTaken):
     print("\n")
-    print(f"Completed Epoche {EpocheNumber} Out of {MaxEpoches}. ({round(EpocheNumber/MaxEpoches*100)}%)")
-    print(f"Took {TimeTaken}s. Time Left: {round((TimeTaken*(MaxEpoches-EpocheNumber))/60, 2)} mins")
+    print(f"Completed Epoche {EpocheNumber+1} Out of {MaxEpoches}. ({round((EpocheNumber+1)/MaxEpoches*100)}%)")
+    print(f"Took {round(TimeTaken, 2)}s. Time Left: {round((TimeTaken*(MaxEpoches-EpocheNumber-1))/60, 2)} mins")
 
 def Teach(network, TrainingData, Epoches, LearningRate=0.1, ReportAfterEpoche=True, UpdateAfterEachItem=False):
     for epoche in range(Epoches):
@@ -37,6 +37,8 @@ def Teach(network, TrainingData, Epoches, LearningRate=0.1, ReportAfterEpoche=Tr
         elapsed_time = time.time() - start_time
         if ReportAfterEpoche:
             EpocheReport( epoche, Epoches, elapsed_time)
+
+            print(NetworkOutputs)
             
 
     return network
@@ -53,7 +55,8 @@ if __name__ == "__main__":
 
         # Randomly Select some data
         numberOfItems = min([numberOfItems, len(data) - 1])
-        RandomData = random.choices(data, k=numberOfItems)
+        #RandomData = random.choices(data, k=numberOfItems)
+        RandomData = [data[0]]
 
         # Open the a slide with microbac on it
         slide = openslide.OpenSlide("raw/16628.tiff")
@@ -71,10 +74,10 @@ if __name__ == "__main__":
         return ExtractedData
 
     # Load the blank Network
-    MyNetwork = network.Load("LargeNetwork.pyn")
+    MyNetwork = network.Load("Trained_LargeNetwork.pyn")
     
     # Load some training Data
-    TrainingData = LoadTrainingData(numberOfItems=200)
+    TrainingData = LoadTrainingData(numberOfItems=1)
 
 
     #                            Epoches
@@ -82,7 +85,7 @@ if __name__ == "__main__":
     
 
     # Save the network
-    network.Save(MyNetwork, "Trained_LargeNetwork.pyn")
+    network.Save(MyNetwork, "Trained_LargeNetwork_v2.pyn")
 
     print("COMPLETE") # DEBUG
 

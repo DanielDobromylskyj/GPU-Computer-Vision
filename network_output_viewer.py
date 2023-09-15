@@ -50,6 +50,8 @@ def DrawOutputs(NetPath):
         # Run Network and get what it thinks is the "mico-bac"
         top, left, width, hight = Executor.CalculateOutputs(TestNetwork, RandomImgData)
 
+        print(top, left, width, hight)
+        
         # Generate Image From ImgData
         array_shape = (100, 100, 3)
         image_array = RandomImgData.reshape(array_shape)
@@ -61,9 +63,9 @@ def DrawOutputs(NetPath):
 
 
         # Define the box parameters
-        box1_top_left = (top * 100, left * 100)
-        box1_width = width * 100
-        box1_height = hight * 100
+        box1_top_left = (top, left)
+        box1_width = width
+        box1_height = hight
         
         box2_top_left = [RandomLabel[0], RandomLabel[1]]
         box2_width = RandomLabel[2]
@@ -86,6 +88,6 @@ def DrawOutputs(NetPath):
 
 
 if __name__ == "__main__":
-    DrawOutputs("AutoSave.pyn")
+    DrawOutputs("Trained_LargeNetwork_v2.pyn")
 
 
